@@ -1,43 +1,21 @@
-use chip8::{chip8::{default_chip8_cpu,cosmic_chip8_cpu},graphics::PixMap,cpu::*,aux::*,keyboard::{Key,KeyEvent,KeyEventKind},errors::Error};
-
-
 use sdl2::event::{Event,WindowEvent};
 use sdl2::keyboard::{Scancode,Keycode};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use clap::{App,AppSettings,Arg};
+use chip8::{
+    chip8::{default_chip8_cpu,cosmic_chip8_cpu},
+    graphics::PixMap,
+    keyboard::{Key,KeyEvent,KeyEventKind},
+    errors::Error};
+
 #[derive(Copy,Clone)]
 struct WindowSize {
     x:u32,
     y:u32
 }
 
-fn norm_key(key:Scancode)->Option<Key> {
-    Some(match key {
-        
-        Scancode::Num1=>Key::One,
-        Scancode::Num2=>Key::Two,
-        Scancode::Num3=>Key::Three,
-        Scancode::Num4=>Key::C,
-        Scancode::Q=>Key::Four,
-        Scancode::W=>Key::Five,
-        Scancode::E=>Key::Six,
-        Scancode::R=>Key::D,
-        Scancode::A=>Key::Seven,
-        Scancode::S=>Key::Eight,
-        Scancode::D=>Key::Nine,
-        Scancode::F=>Key::E,
 
-        Scancode::Z=>Key::A,
-        Scancode::X=>Key::Zero,
-        Scancode::C=>Key::B,
-        Scancode::V=>Key::F,
-        _=>return None  
-    })
-}
-fn norm_key_event(key:Scancode,kind:KeyEventKind)->Option<KeyEvent> {
-    Some(KeyEvent::new(norm_key(key)?,kind))
-}
 fn color(byte:u8)->u8 {
     match byte {
         0=>0,
@@ -85,32 +63,37 @@ pub fn main() -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    let mut canvas = window.into_canvas().present_vsync().build().map_err(|e| e.to_string())?;
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 64, 32)
         .map_err(|e| e.to_string())?;
-    let mut display = |pix:&mut PixMap,size:WindowSize|->Result<(),String>{
-        if pix.ready() {
-            texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                for y in 0..32 {
-                    for x in 0..64 {
-                        let offset = y * pitch + x * 3;
-                        let col:u8 = color(pix.get(x as u8,y as u8));
-                        buffer[offset] = col;
-                        buffer[offset + 1] = col;
-                        buffer[offset + 2] = col;
-                    }
+    
+    let mut update_canvas = |pix:&mut PixMap,size:WindowSize,use_data:bool|->Result<(),String>{
+                if use_data{
+                    canvas.clear();
+                    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                        for y in 0..32 {
+                            for x in 0..64 {
+                                let offset = y * pitch + x * 3;
+                                let col:u8 = color(pix.get(x as u8,y as u8));
+                                buffer[offset] = col;
+                                buffer[offset + 1] = col;
+                                buffer[offset + 2] = col;
+                            }
+                        }
+                    })?;
+                    canvas.copy(&texture, None, Some(Rect::new(0, 0, size.x, size.y)))?;
+                    pix.flush();
                 }
-            })?;
-            canvas.clear();
-            canvas.copy(&texture, None, Some(Rect::new(0, 0, size.x, size.y)))?;
-           pix.flush()
-        }
-        
-        canvas.present();
-        Ok(())
+                canvas.present();
+                Ok(())
+    };
+            
+           
+    let mut display = |pix:&mut PixMap,size:WindowSize|->Result<(),String>{
+        return update_canvas(pix,size,pix.ready())
     };
     display(chip8.graphics_mut(),size)?;
     let mut event_pump = sdl_context.event_pump()?;
@@ -134,7 +117,7 @@ pub fn main() -> Result<(), String> {
                                 chip8.keyboard_mut().action(key);
                             }
                             _=>{
-
+                                
                             }
                         }
                         _=>{
@@ -142,19 +125,19 @@ pub fn main() -> Result<(), String> {
                         }
                     }
                 }
-                Event::Window { win_event, .. }=>{
-                    if let WindowEvent::Resized(w, h) = win_event {
-                        size.x=w as u32;
-                        size.y=h as u32;
-                    }
+                Event::Window{win_event,..}=>{
+                    if let WindowEvent::Resized(x,y) =win_event {
+                        size.x=x as u32;
+                        size.y=y as u32;
+                        chip8.graphics_mut().force_redisplay();
+                    } 
                 }
+               
                 _ => {}
             }
         }
-        // The rest of the game loop goes here...
         let err= chip8.execute_step();
         if err != Error::None {
-            println!("{}",err);
             break
         }
         display(chip8.graphics_mut(),size)?;
@@ -162,4 +145,29 @@ pub fn main() -> Result<(), String> {
     }
     chip8.close(sound,delay);
     Ok(())
+}
+
+fn norm_key(key:Scancode)->Option<Key> {
+    Some(match key {
+        Scancode::Num1=>Key::One,
+        Scancode::Num2=>Key::Two,
+        Scancode::Num3=>Key::Three,
+        Scancode::Num4=>Key::C,
+        Scancode::Q=>Key::Four,
+        Scancode::W=>Key::Five,
+        Scancode::E=>Key::Six,
+        Scancode::R=>Key::D,
+        Scancode::A=>Key::Seven,
+        Scancode::S=>Key::Eight,
+        Scancode::D=>Key::Nine,
+        Scancode::F=>Key::E,
+        Scancode::Z=>Key::A,
+        Scancode::X=>Key::Zero,
+        Scancode::C=>Key::B,
+        Scancode::V=>Key::F,
+        _=>return None  
+    })
+}
+fn norm_key_event(key:Scancode,kind:KeyEventKind)->Option<KeyEvent> {
+    Some(KeyEvent::new(norm_key(key)?,kind))
 }

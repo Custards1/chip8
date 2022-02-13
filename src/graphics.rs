@@ -70,4 +70,7 @@ impl PixMap {
     pub fn ready(&self)->bool{
         self.has_updates
     }
+    pub fn force_redisplay(&mut self){
+        self.has_updates = true
+    }
 }
