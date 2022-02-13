@@ -21,3 +21,12 @@ OPTIONS:
 ```
 # Games
 Don't forget to try out some games! Head on over to https://github.com/kripod/chip8-roms to download some games to play!
+
+# Controls
+```
+Yours     Chip8
+1 2 3 4 | 1 2 3 C
+Q W E R | 4 5 6 D
+A S D F | 7 8 9 E
+Z X C V | A 0 B F
+```
