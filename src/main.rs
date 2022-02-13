@@ -1,12 +1,12 @@
 use chip8::{chip8::{default_chip8_cpu,cosmic_chip8_cpu},graphics::PixMap,cpu::*,aux::*,keyboard::{Key,KeyEvent,KeyEventKind},errors::Error};
 
 
-use sdl2::event::Event;
+use sdl2::event::{Event,WindowEvent};
 use sdl2::keyboard::{Scancode,Keycode};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use clap::{App,AppSettings,Arg};
-
+#[derive(Copy,Clone)]
 struct WindowSize {
     x:u32,
     y:u32
@@ -52,13 +52,14 @@ pub fn main() -> Result<(), String> {
     .arg(
         Arg::new("game")
         .required(true)
-        .help("the chip8 rom to run")
+        .help("the path to the chip8 rom to run")
     )
     .arg(
         Arg::new("cosmic")
         .short('c')
         .long("cosmic")
         .takes_value(false)
+        .help("run the emulator in cosmic vip mode (default: false)")
     )
     .get_matches();
     let game = match matches.value_of("game") {
@@ -90,7 +91,7 @@ pub fn main() -> Result<(), String> {
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 64, 32)
         .map_err(|e| e.to_string())?;
-    let mut display = |pix:&mut PixMap|->Result<(),String>{
+    let mut display = |pix:&mut PixMap,size:WindowSize|->Result<(),String>{
         if pix.ready() {
             texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 for y in 0..32 {
@@ -111,7 +112,7 @@ pub fn main() -> Result<(), String> {
         canvas.present();
         Ok(())
     };
-    display(chip8.graphics_mut())?;
+    display(chip8.graphics_mut(),size)?;
     let mut event_pump = sdl_context.event_pump()?;
     
     'running: loop {
@@ -141,6 +142,12 @@ pub fn main() -> Result<(), String> {
                         }
                     }
                 }
+                Event::Window { win_event, .. }=>{
+                    if let WindowEvent::Resized(w, h) = win_event {
+                        size.x=w as u32;
+                        size.y=h as u32;
+                    }
+                }
                 _ => {}
             }
         }
@@ -150,7 +157,7 @@ pub fn main() -> Result<(), String> {
             println!("{}",err);
             break
         }
-        display(chip8.graphics_mut())?;
+        display(chip8.graphics_mut(),size)?;
         chip8.keyboard_mut().reset()
     }
     chip8.close(sound,delay);
