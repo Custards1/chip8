@@ -24,6 +24,9 @@ OPTIONS:
 Don't forget to try out some games! Head on over to https://github.com/kripod/chip8-roms to download some games to play!
 
 # Controls
+Note: Not all games expect the same keypad!
+
+
 ```
 Yours     Chip8
 1 2 3 4 | 1 2 3 C

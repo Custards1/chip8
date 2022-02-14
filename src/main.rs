@@ -2,9 +2,9 @@ use sdl2::event::{Event,WindowEvent};
 use sdl2::keyboard::{Scancode,Keycode};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use clap::{App,AppSettings,Arg};
+use clap::{App,Arg};
 use chip8::{
-    chip8::{default_chip8_cpu,cosmic_chip8_cpu},
+    chip8::Chip8,
     graphics::PixMap,
     keyboard::{Key,KeyEvent,KeyEventKind},
     errors::Error};
@@ -44,10 +44,7 @@ pub fn main() -> Result<(), String> {
         Some(a)=>Ok(a),
         _=>Err("No game provided")
     }?;
-    let mut chip8 = match matches.is_present("cosmic"){
-        true=>cosmic_chip8_cpu(),
-        _=>default_chip8_cpu()
-    };
+    let mut chip8 = Chip8::create(matches.is_present("cosmic"));
     let rom = std::fs::read(game).map_err(|e|e.to_string())?;
     chip8.cpu.memory_mut().load_big_binary_instructions(0x200,&rom);
     chip8.cpu.memory().dump(0x200..0x220);
@@ -56,14 +53,14 @@ pub fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video()?;
     let mut size = WindowSize{x:800,y:600};
     let window = video_subsystem
-        .window("rust-sdl2 demo: Video", size.x, size.y)
+        .window(game, size.x, size.y)
         .resizable()
         .position_centered()
         .opengl()
         .build()
         .map_err(|e| e.to_string())?;
 
-    let mut canvas = window.into_canvas().present_vsync().build().map_err(|e| e.to_string())?;
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator

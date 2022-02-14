@@ -1,8 +1,3 @@
-use std::sync::{Arc,Mutex};
-use std::sync::mpsc::{Sender,Receiver,channel};
-pub type ThreadSafe<I>= Arc<Mutex<I>>;
-
-
 #[derive(Copy, Clone,PartialEq,PartialOrd,Debug)]
 #[repr(u8)]
 pub enum KeyEventKind {

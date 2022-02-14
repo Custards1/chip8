@@ -1,4 +1,3 @@
-mod utils;
 pub mod cpu;
 pub mod graphics;
 pub mod errors;

@@ -1,4 +1,5 @@
 use crate::aux::Auxillary;
+use byteorder::{BigEndian,ReadBytesExt};
 use oorandom as rand;
 pub const CHIP8_MEM_SIZE:usize = 0xFFF;
 pub const CHIP8_REGISTER_COUNT:usize = 0xF+1;
@@ -19,7 +20,7 @@ pub struct MemoryStick{
     callstack:Vec<u16>,
     size:u16
 }
-use byteorder::{BigEndian,LittleEndian, ReadBytesExt};
+
 impl MemoryStick {
     #[inline]
     pub fn open()->Self{
@@ -95,10 +96,7 @@ impl MemoryStick {
     pub (crate) fn arena(&self)->&[u8] {
         &self.memory
     }
-    #[inline]
-    fn size(&self)->u16 {
-        self.size
-    }
+    
     #[inline]
     pub fn u16(&self,addr:u16)->u16 {
         ((*self.derefrence(addr) as u16)<<8)|(*self.derefrence(addr+1) as u16)
@@ -205,7 +203,7 @@ impl DenseCpu {
         memory.fill(addr, registers)
     }
     #[inline]
-    pub fn fill_registers(&mut self,mut addr:u16,mut reg:u8) {
+    pub fn fill_registers(&mut self,mut addr:u16,reg:u8) {
         for regi in 0..=reg {
             //println!("{} regi reads {:04X} {:04X}",regi,*self.memory().derefrence(addr),addr);
             *self.register_mut(regi) = *self.memory().derefrence(addr);
@@ -213,7 +211,7 @@ impl DenseCpu {
         }
     }
     #[inline]
-    pub fn load_registers(&mut self,mut addr:u16,mut reg:u8) {
+    pub fn load_registers(&mut self,mut addr:u16,reg:u8) {
         for reg in 0..=reg {
             let b = *self.register(reg);
             *self.memory_mut().derefrence_mut(addr)=b;
@@ -221,27 +219,27 @@ impl DenseCpu {
         }
     }
     #[inline]
-    pub(crate) fn registery(&self) ->&[u8] {
+    pub fn registery(&self) ->&[u8] {
         &self.registers
     }
     #[inline]
-    pub(crate) fn register(&self,ptr:u8) ->&u8 {
+    pub fn register(&self,ptr:u8) ->&u8 {
         self.registers.get(sized_rptr!(ptr)).unwrap()
     }
     #[inline]
-    pub fn registerI(&self)->u16{
+    pub fn register_i(&self)->u16{
         self.regi
     }
     #[inline]
-    pub fn set_registerI(&mut self,i:u16){
+    pub fn set_register_i(&mut self,i:u16){
         self.regi = sized_ptr!(i)
     }
     #[inline]
-    pub(crate) fn deref_i(&self)->&u8 {
+    pub fn deref_i(&self)->&u8 {
         self.memory.derefrence(self.regi)
     }
     #[inline]
-    pub(crate) fn deref_i_mut(&mut self)->&mut u8{
+    pub fn deref_i_mut(&mut self)->&mut u8{
         self.memory.derefrence_mut(self.regi)
     }
     #[inline]

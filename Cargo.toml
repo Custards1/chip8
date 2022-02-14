@@ -7,9 +7,11 @@ edition = "2018"
 name="chip8"
 [dependencies]
 oorandom = "*"
-sdl2 = "0.35"
 byteorder="*"
 clap = { version = "3.0.14", features = ["derive"] }
+[dependencies.sdl2]
+version = "0.35"
+
 [profile.dev]
 overflow-checks = false
 [profile.release]

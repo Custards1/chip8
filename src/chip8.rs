@@ -7,7 +7,7 @@ use crate::sound::Sound;
 use crate::aux::Auxillary;
 use crate::fonts::{FontPack,C8_CLASSIC_FONT};
 pub const C8_TIMER_RATE:std::time::Duration = std::time::Duration::from_micros(16700);
-pub const C8_CPU_RATE:std::time::Duration = std::time::Duration::from_micros(2000);
+pub const C8_CPU_RATE:  std::time::Duration = std::time::Duration::from_micros(1000);
 
 macro_rules! x_in_xkk {
     ($inst:expr) => {
@@ -44,34 +44,10 @@ pub struct Chip8{
     state:CpuState,
     cosmic:bool,
     needs_key:bool,
-    last_exec:std::time::Instant
+    last_exec:std::time::Instant,
+    cpu_rate:std::time::Duration,
+    timer_rate:std::time::Duration
 }
-
-
-#[inline]
-pub fn chip8_cpu(cosmic:bool,graphics_pack:PixMap,sound_pack:Sound)->Chip8 {
-    Chip8::new(
-        DefaultCpu::new(MemoryStick::open(), 
-                        Auxillary::pack(graphics_pack, sound_pack)),
-                        cosmic)
-}
-
-#[inline]
-pub fn custom_chip8(cosmic:bool,font:&str)->Chip8 {
-    chip8_cpu(cosmic, PixMap::pack(),Sound::pack()).with_font(font)
-}
-
-#[inline]
-pub fn default_chip8_cpu()->Chip8 {
-    custom_chip8(false, C8_CLASSIC_FONT)
-}
-
-#[inline]
-pub fn cosmic_chip8_cpu()->Chip8 {
-    custom_chip8(true, C8_CLASSIC_FONT)
-}
-
-
 
 #[derive(Clone)]
 pub struct CpuState {
@@ -89,6 +65,7 @@ impl CpuState {
             sound_timer:Arc::new(Mutex::new(0)),
         }
     }
+
     pub fn stop(&self)->bool{
         match self.executing.lock(){
             Ok(mut a)=>{*a=false;true},
@@ -117,8 +94,17 @@ impl Chip8 {
             state:CpuState::new(),
             cosmic:cosmic,
             needs_key:false,
-            last_exec:std::time::Instant::now()
+            last_exec:std::time::Instant::now(),
+            cpu_rate:C8_CPU_RATE,
+            timer_rate:C8_TIMER_RATE,   
         }
+    }
+    #[inline]
+    pub fn create(cosmic:bool)->Chip8 {
+        Chip8::new(
+            DefaultCpu::new(MemoryStick::open(), 
+                            Auxillary::pack(PixMap::pack(), Sound::pack())),
+                            cosmic).with_font(C8_CLASSIC_FONT)
     }
     #[inline]
     pub fn keyboard(&self)->&Keyboard{
@@ -261,8 +247,8 @@ impl Chip8 {
                         Err(e)=>return e
                     }
                     let end = std::time::Instant::now()-self.last_exec;
-                    if C8_CPU_RATE > end {
-                        std::thread::sleep(C8_CPU_RATE-end);
+                    if self.cpu_rate > end {
+                        std::thread::sleep(self.cpu_rate-end);
                     }
                     self.last_exec = std::time::Instant::now();
                 }
@@ -277,8 +263,8 @@ impl Chip8 {
             return Err(Error::ExecutionLocked);
         }
         self.cpu.jump(0x200);
-        let sound = self.open_sound(C8_TIMER_RATE.clone());
-        let delay = self.open_delay(C8_TIMER_RATE.clone());
+        let sound = self.open_sound(self.timer_rate.clone());
+        let delay = self.open_delay(self.timer_rate.clone());
         Ok((sound,delay))
     }
     pub fn close(&mut self,sound:std::thread::JoinHandle<()>,delay:std::thread::JoinHandle<()>) {
@@ -286,46 +272,24 @@ impl Chip8 {
         let _ = sound.join();
         let _ = delay.join();
     }
-    // pub fn execute(&mut self)->Error {
-    //     if !self.state.start() {
-    //         return Error::ExecutionLocked;
-    //     }
-    //     self.cpu.jump(0x200);
-    //     let sound = self.open_sound(C8_TIMER_RATE.clone());
-    //     let delay = self.open_delay(C8_TIMER_RATE.clone());
-    //     let mut errors =None;
-    //     loop {
-    //         let now = std::time::Instant::now();
-    //         match self.state.is_running(){
-    //             Some(is_r)=>{
-    //                 if !is_r{
-    //                     break;
-    //                 }
-    //             }
-    //             _=>{errors = Some(Error::ExecutionLocked);break}
-    //         }
-    //         match self.execute_instruction() {
-    //             Ok(_)=>{},
-    //             Err(e)=>{errors = Some(e);break}
-    //         }
-    //         let end = std::time::Instant::now()-now;
-    //         if C8_CPU_RATE > end {
-    //             std::thread::sleep(C8_CPU_RATE-end);
-    //         }
-    //     }
-    //     self.state.stop();
-    //     let _ = sound.join();
-    //     let _ = delay.join();
-    //     match errors {
-    //         Some(err)=>err,
-    //         _=>Error::None
-    //     }
-    // }
+    pub fn set_speed(&mut self,speed:std::time::Duration){
+        self.cpu_rate=speed;
+    }
+    pub fn slowdown(&mut self,n:u64){
+        self.cpu_rate+=std::time::Duration::from_micros(10*n);
+    }
+    pub fn speedup(&mut self,n:u64){
+        let t1 =std::time::Duration::from_micros(10*n);
+        if self.cpu_rate > t1 {
+            self.cpu_rate-=t1
+        }
+        
+    }
+    ///Main instruction decoder
     pub fn execute_instruction(&mut self)->Result<()> {
         let instruction = self.cpu.instruction();
         self.cpu.inc_instruction();
         //println!("{:04X}: {:04X}",self.cpu.program_counter(),instruction);
-        
         let _ = match instruction {
             0x00E0=>self.cpu.aux_mut().graphics_mut().clear(),
             0x00EE=>match self.cpu.ret(){
@@ -452,7 +416,7 @@ impl Chip8 {
                 }
                 0xA=>{
                     //println!("OI: {:04X}, OV: {:04X}",self.cpu.registerI(),self.cpu.memory().derefrence(self.cpu.registerI()));
-                    self.cpu.set_registerI(instruction&0xFFF);
+                    self.cpu.set_register_i(instruction&0xFFF);
                     //println!("I: {:04X}, V: {:04X}",self.cpu.registerI(),self.cpu.memory().derefrence(self.cpu.registerI()))
                 }
                 0xB=>{
@@ -472,7 +436,7 @@ impl Chip8 {
                     let x = *self.cpu.register(x_in_xy!(instruction))&63;
                     let mut y = *self.cpu.register(y_in_xy!(instruction))&31;
                     let mut set = false;
-                    let i = self.cpu.registerI();
+                    let i = self.cpu.register_i();
                     let max = i + (height as u16);
                     for index in i..max {
                         let mut sprite = *self.cpu.memory().derefrence(index);
@@ -551,7 +515,7 @@ impl Chip8 {
                         }
                     }
                     0x1E=>{
-                        let byte = *self.cpu.register(x_in_xkk!(instruction)) as u16 + self.cpu.registerI();
+                        let byte = *self.cpu.register(x_in_xkk!(instruction)) as u16 + self.cpu.register_i();
                         if !self.cosmic {
                             if byte > 0xFFF {
                                 *self.cpu.register_mut(0xF)=1
@@ -559,15 +523,15 @@ impl Chip8 {
                                 *self.cpu.register_mut(0xF)=0
                             }
                         }
-                        self.cpu.set_registerI(byte);
+                        self.cpu.set_register_i(byte);
                     }
                     0x29=>{
                         let byte = (*self.cpu.register(x_in_xkk!(instruction))&0xF) as u16;
-                        self.cpu.set_registerI(byte*5)
+                        self.cpu.set_register_i(byte*5)
                     }
                     0x33=>{
                         let val = self.cpu.register(x_in_xkk!(instruction));
-                        let i = self.cpu.registerI();
+                        let i = self.cpu.register_i();
                         let temp_alloc = format!("{:03}",val);
                         let string = temp_alloc.as_bytes();
                         *self.cpu.memory_mut().derefrence_mut(i) =   string[0]-'0' as u8;
@@ -577,18 +541,18 @@ impl Chip8 {
                     0x65=>{
                     
                         let x = x_in_xy!(instruction);
-                        let addr = self.cpu.registerI();
+                        let addr = self.cpu.register_i();
                         self.cpu.fill_registers(addr, x);                  
                         if self.cosmic {
-                            self.cpu.set_registerI(addr+(x as u16))
+                            self.cpu.set_register_i(addr+(x as u16))
                         }
                     }
                     0x55=>{
                         let x = x_in_xy!(instruction);
-                        let addr = self.cpu.registerI();
+                        let addr = self.cpu.register_i();
                         self.cpu.load_registers(addr, x);                   
                         if self.cosmic {
-                            self.cpu.set_registerI(addr+(x as u16))
+                            self.cpu.set_register_i(addr+(x as u16))
                         }
                     }
                     _=>{
