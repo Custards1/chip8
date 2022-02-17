@@ -1,6 +1,7 @@
 # chip8
 A chip8 emulator for the desktop, play all your favorite chip8 games!
 # Building
+*** Currently ONLY works on x86_64 linux***
 You must have a copy of the development version of SDL2 >= 2.0.8 installed on your system aswell as a modern version of cargo.
 # Installation
 Clone this repo and open it in a terminal and run:
